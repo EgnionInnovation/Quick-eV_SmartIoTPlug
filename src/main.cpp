@@ -7,35 +7,36 @@
 #include <OTA_cert.h>
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
-#include <TinyGSM.h>
+// #include <TinyGSM.h>
 #include <ArduinoHttpClient.h>
 #include "time.h"
 #include <SoftwareSerial.h>
-#include <Firebase_ESP_Client.h>
+#include <FirebaseClient.h>
 
-
-#define debug true
+#define debugging true
 #define Relays_Pin 32
 #define Emergency_Button 12
+void IRAM_ATTR ISR();
 
 // ---------------------------------------------------------------------------------------- Device Parameters
-String equipment_id, password_plain, password_cipher;
+String equipment_id, equipment_version, password_plain, password_cipher;
 String mac_address, ip_address;
 bool provisioning_required = false;
+int is_active = 0, is_connected = 0;
+int duration;
+String relay_status = "OFF";
 String firmware_version, hardware_version, region;
 String password, encrypted_password, key, iv;
-int relay_status;
 
 // ---------------------------------------------------------------------------------------- EEPROM Parameters
-int equipment_id_address = 1, password_address = 20, encrypted_password_address = 30;
+int equipment_id_address = 1, equipment_version_address = 20;
 
 // ---------------------------------------------------------------------------------------- WiFi Manager
-#define CAPTIVE_PORTAL_TIMEOUT 60
+#define CAPTIVE_PORTAL_TIMEOUT 30
 WiFiManager wm;
 WiFiManagerParameter eq_id("1", "Equipment ID", "", 40);
-// WiFiManagerParameter server_name("2", "Server Name", "", 40);
-// WiFiManagerParameter charger_identifier("3", "Charger ID", "", 40);
-String eq_id_str = ""; //, server_device_name = "", charger_name = "";
+WiFiManagerParameter eq_ver("2", "Equipment Version", "", 40);
+String eq_id_str = "", eq_ver_str = "";
 void saveParamsCallback();
 int writeStringToEEPROM(int addrOffset, const String &strToWrite);
 int readStringFromEEPROM(int addrOffset, String *strToRead);
@@ -60,7 +61,13 @@ int FirmwareVersionCheck(void);
 SoftwareSerial ESPFixed;
 void send_data();
 void receive_data();
-unsigned long send_data_time, SEND_DATA_INTERVAL;
+unsigned long send_data_time = millis(), SEND_DATA_INTERVAL = 1000;
+
+// ---------------------------------------------------------------------------------------- Measured Properties' Variables
+float kwh_total, kwh_L1, kwh_L2, kwh_L3;
+float amps_L1, amps_L2, amps_L3;
+float volts_L1, volts_L2, volts_l3;
+float freq, power_factor, temperature;
 
 // ---------------------------------------------------------------------------------------- NTP Server
 const char *ntpServer = "pool.ntp.org";
@@ -81,27 +88,47 @@ char timeYear[5];
 char timeZone[4];
 
 // ---------------------------------------------------------------------------------------- Firebase
-// Insert Firebase project API Key
-#define API_KEY "AIzaSyACMnlR3Bobo1B0uDN9Q1kxHPWrdeIs0ng"
-bool id_status[1000];
+// The API key can be obtained from Firebase console > Project Overview > Project settings.
+#define API_KEY "AIzaSyD4HIIFu-PHnXDRJolS1o61Hp7ELkAMjj0"
 
-//Provide the token generation process info.
-#include "addons/TokenHelper.h"
-//Provide the RTDB payload printing info and other helper functions.
-#include "addons/RTDBHelper.h"
+/**
+ * This information can be taken from the service account JSON file.
+ *
+ * To download service account file, from the Firebase console, goto project settings,
+ * select "Service accounts" tab and click at "Generate new private key" button
+ */
+#define DATABASE_URL "https://test-f397b-default-rtdb.firebaseio.com/"
+#define FIREBASE_PROJECT_ID "test-f397b"
+#define FIREBASE_CLIENT_EMAIL "firebase-adminsdk-ocjj0@test-f397b.iam.gserviceaccount.com"
+const char PRIVATE_KEY[] PROGMEM = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC1jO/6SZPQ7drL\nlFSoHel/APro2naCKWGhpT8S7wQHaTxhT3H8kgeo4eoyIj0LjkP07jSTRfqqBL2/\nL0eOAg+mtdztrI8PnGE8e2V9exqcepEOp2Xt+geqNL7hhLCH7dm4sMbbG/K49cF1\nz7U/FqZSsLmRvopNwcCPZXo4o6HbPqknsHEvkK6bJb6GMKlmOsFVSG+4qMXhczR2\n5HAH0NZ3aFJqU8H1FtFnhUAYjHNf2hA2ClqAFolQI7XfuANh31v19v0ycVkQxx7c\nwPIoLYswX/vmnBHtn1D4+gAzbD92q3wPPhzQCRPJLB8encbMv1LN/eXbBWOioGgJ\nqX7uLl0jAgMBAAECggEAC0qUslBZLSld7kNvcHVLzGZXNJxBup6wP8lzPs42xe85\nniO+xyKd71b9pdiTS2CxwU3/Xxl/GYvp8TYTkTV3m7q73txYmXP0aDqUeVVqtki5\nNNwcbsyaJW/aX1RNVmbon5/+/imi0vYV7inY7++MsJ/lKrdbCrL+MuzwyQ0ESApm\nwu+JRAwMnWAbBxf5rJBy/236g3D1abJk7MJU6M4lgaDnqdHqLHenFgynGYarIIR+\n89wPZ8G//ivHP0tDZ+BXQNGh7DXQ8QVAN5Z5mBg4cYrZAgRyXZPZ95xMMkLTDsrB\n1zuktQ09ffVLK2pHJ0niPpvPtTP3MjFTcaiUkbEgAQKBgQDmQm3Qn7P9RDYC9SYn\nZRpph8KfSSd/3gvXK7ZV0L8XrSJjt8xKb9Dtkt8AzG0qMWZRKNHpX3HbBaNNCGOx\nk7+v3qWl3hIjzfDvbdbcemnIDiW9rsqSLgcbI1lIF6Ewd6Tpe8rDnPV8wLwPmaNe\nJnbNrsvnZnzPh9HYhi72fAjMAQKBgQDJ2I37iD4giyV4ScFaRtWBQ0ll04a/MGKt\nfPg8L1cwnCWxurh029Tdsb7LmKKi66ZGsRUQqv8jXhyVXdRGjdNanuytosVijhEl\nVN50OtcSqW6W2MNoAYcnzLFP8KTKDv19GMI8xGoaeZDmhmUE0GyZsQdkI2hlfgI1\n47JqqI55IwKBgGEy74pesCscbTRoafe9TR35KiX1SpBGmnb1Q94L5W7ILjkr8DgH\n5Yk0M6Dxqq9h9RATjDDYkoZjZeDxxqvCc+t4sDJJgRzOJYPcuROPNTI3DqV4sJhu\nh59kF59AIlIEX4AUOq7ChjpoXbq0H2tyDzqaLAb9k3hDnEirtA1mpIwBAoGBAK7V\n3E42+hF4VbF2uXt4BbHc1bPU4E+1GpRJvj9rhit95YyoPuRCEoUhVDHIeX+DfNiY\nxLVWWH+LIlkjGB8w9BT3uezBJBY1Fpbuh23IFcl9Z2RUSBZL1IVd4Wxr9mFrUJjO\nHFlEjN9301JKsS/VVWxfEhbkMKZQ2ptRKpcGf7pfAoGBAI9hwu/T0HuMYh/iT+R7\nO5Rb1GTewDxlvzdR9PJYDJQh7Gbu3ADflJ+F1AwZyt9oOaGxqPWLj7lbjtfGcR9X\nqeCdDNfy4UZH5pga81QQ8g4r/onCQXu1Zn4rSfedcp+97LVqe+Gw5g51QsMv88aV\nu2B3ph2ClZGgHZ3mMZoQo58h\n-----END PRIVATE KEY-----\n";
 
-// Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "https://evm-vending-admin-web-default-rtdb.firebaseio.com/"
+void timeStatusCB(uint32_t &ts);
 
-//Define Firebase Data object
-FirebaseData fbdo;
+void asyncCB(AsyncResult &aResult);
 
-FirebaseAuth auth;
-FirebaseConfig config;
+void printResult(AsyncResult &aResult);
 
-unsigned long sendDataPrevMillis = 0;
-bool signupOK = false;
+unsigned long ms = 0;
 
+DefaultNetwork network; // initilize with boolean parameter to enable/disable network reconnection
+
+ServiceAuth sa_auth(timeStatusCB, FIREBASE_CLIENT_EMAIL, FIREBASE_PROJECT_ID, PRIVATE_KEY, 3000 /* expire period in seconds (<3600) */);
+
+FirebaseApp app;
+RealtimeDatabase Database;
+
+#include <WiFiClientSecure.h>
+WiFiClientSecure ssl_client, ssl1;
+
+using AsyncClient = AsyncClientClass;
+
+AsyncClient aClient(ssl_client, getNetwork(network)), client1(ssl1, getNetwork(network));
+AsyncResult result1;
+
+void printResult(AsyncResult &aResult);
+void printLocalTime();
+
+unsigned long read_firebase_time = millis(), READ_FIREBASE_INTERVAL = 1000;
 // ---------------------------------------------------------------------------------------- API Server
 char *serverName = "https://staging.quick-ev.com/public/api";
 WiFiClientSecure client;
@@ -140,478 +167,672 @@ const char *test_root_ca =
 
 void setup()
 {
-  delay(1000); // 1 second for settling
-  // ---------------------------------------------------------------- Begin serial monitor, serial with fixed ESP and EEPROM
-  Serial.begin(115200);
-  ESPFixed.begin(9600, SWSERIAL_8N1, 34, 33, false);
-  EEPROM.begin(150);
-  if (debug)
-  {
-    Serial.println("Started!");
-    Serial.println("Firmware Version: " + FirmwareVer);
-  }
-  // ---------------------------------------------------------------- WiFi Manager
-  WiFi.mode(WIFI_AP); // explicitly set mode, esp defaults to STA+AP
-  WiFi.enableAP(true);
-  // wm.resetSettings();
-  wm.addParameter(&eq_id);
-  //   wm.addParameter(&server_name);
-  //   wm.addParameter(&charger_identifier);
-  wm.setTimeout(CAPTIVE_PORTAL_TIMEOUT); // if nobody logs in to the portal, continue after timeout
-  wm.setConnectTimeout(CAPTIVE_PORTAL_TIMEOUT);
-  wm.setAPClientCheck(true); // avoid timeout if client connected to softap
-  wm.setSaveParamsCallback(saveParamsCallback);
-  std::vector<const char *> menu = {"wifi", "sep", "restart", "exit"};
-  wm.setMenu(menu);
-  wm.setClass("invert");
+    delay(1000); // 1 second for settling
+    // ---------------------------------------------------------------- Begin serial monitor, serial with fixed ESP and EEPROM
+    Serial.begin(115200);
+    ESPFixed.begin(9600, SWSERIAL_8N1, 34, 33, false);
+    EEPROM.begin(150);
+    if (debugging)
+    {
+        Serial.println("Started!");
+        Serial.println("Firmware Version: " + FirmwareVer);
+    }
+    // ---------------------------------------------------------------- WiFi Manager
+    WiFi.mode(WIFI_AP); // explicitly set mode, esp defaults to STA+AP
+    WiFi.enableAP(true);
+    // wm.resetSettings();
+    wm.addParameter(&eq_id);
+    wm.addParameter(&eq_ver);
+    wm.setTimeout(CAPTIVE_PORTAL_TIMEOUT); // if nobody logs in to the portal, continue after timeout
+    wm.setConnectTimeout(CAPTIVE_PORTAL_TIMEOUT);
+    wm.setAPClientCheck(true); // avoid timeout if client connected to softap
+    wm.setSaveParamsCallback(saveParamsCallback);
+    std::vector<const char *> menu = {"wifi", "sep", "restart", "exit"};
+    wm.setMenu(menu);
+    wm.setClass("invert");
 
-  if (wm.startConfigPortal("Quick-eV IoT Adapter", "1234567890"))
-  {
-    Serial.println("Portal Running");
-  }
-  else
-  {
-    if (wm.autoConnect("Quick-eV IoT Adapter", "1234567890"))
-      Serial.println("Connected");
+    if (wm.startConfigPortal("Quick-eV IoT Adapter", "1234567890"))
+    {
+        Serial.println("Portal Running");
+    }
     else
     {
-      Serial.println("Failed");
-      ESP.restart();
-    }
-  }
-
-  readStringFromEEPROM(1, &eq_id_str);
-  //   readStringFromEEPROM(20, &server_device_name);
-  //   readStringFromEEPROM(50, &charger_name);
-
-  equipment_id = eq_id_str;
-  //   ch_port = charger_name;
-  //   in_topic = "devices/" + server_device_name + "/inmessages/";
-  //   out_topic = "devices/" + server_device_name + "/outmessages/";
-
-  Serial.println(eq_id_str);
-  //   Serial.println(server_device_name);
-  //   Serial.println(charger_name);
-
-  // ---------------------------------------------------------------- API Server
-  client.setCACert(test_root_ca);
-  if (!client.connect(serverName, 80))
-    Serial.println("Connection failed!");
-  else
-  {
-    Serial.println("Connected to server!");
-  }
-
-  readStringFromEEPROM(equipment_id_address, &equipment_id);
-  if (equipment_id == "")
-  {
-    provisioning_required = true;
-  }
-
-  // ---------------------------------------------------------------- Provisioning API Call
-  while (provisioning_required)
-  {
-    if (WiFi.status() == WL_CONNECTED)
-    {
-      HTTPClient https;
-      char buf[80];
-      strcpy(buf, serverName);
-      strcat(buf, "/equipment/provisioning");
-      char *provisioning_server_name = buf;
-
-      // Your Domain name with URL path or IP address with path
-      https.begin(client, buf);
-
-      StaticJsonDocument<1024> doc;
-      doc["mac_address"] = String(WiFi.macAddress());
-      doc["ip_address"] = WiFi.localIP().toString();
-      doc["firm_version"] = firmware_version;
-      doc["hardware_version"] = hardware_version;
-      doc["status"] = "online";
-      doc["region"] = region;
-
-      char response[1024];
-      serializeJson(doc, response);
-
-      // If you need an HTTP request with a content type: application/json, use the following:
-      https.addHeader("Content-Type", "application/json");
-      int httpResponseCode = https.POST(response);
-
-      Serial.println(response);
-
-      Serial.print("HTTP Response code: ");
-      Serial.println(httpResponseCode);
-
-      String payload = "{}";
-      payload = https.getString();
-
-      Serial.println(payload);
-
-      StaticJsonDocument<1024> api_response;
-      DeserializationError err = deserializeJson(api_response, payload);
-      if (err)
-      {
-        if (debug)
+        if (wm.autoConnect("Quick-eV IoT Adapter", "1234567890"))
+            Serial.println("Connected");
+        else
         {
-          Serial.print(F("deserializeJson() failed with code "));
-          Serial.println(err.f_str());
+            Serial.println("Failed");
+            ESP.restart();
         }
-      }
-      else
-      {
-        String temp_equipment_id = api_response["equipment_id"];
-        String temp_password = api_response["password"];
-        String temp_encrypted_password = api_response["encrypted_password"];
-        String temp_key = api_response["key"];
-        String temp_iv = api_response["iv"];
+    }
 
-        equipment_id = temp_equipment_id;
-        password = temp_password;
-        encrypted_password = temp_encrypted_password;
-        key = temp_key;
-        iv = temp_iv;
-        writeStringToEEPROM(equipment_id_address, equipment_id);
-        if (equipment_id != "")
+    readStringFromEEPROM(equipment_id_address, &eq_id_str);
+    readStringFromEEPROM(equipment_version_address, &eq_ver_str);
+
+    equipment_id = eq_id_str;
+    equipment_version = eq_ver_str;
+
+    Serial.println(eq_id_str);
+    Serial.println(equipment_version);
+
+    // ---------------------------------------------------------------- API Server
+    client.setCACert(test_root_ca);
+    if (!client.connect(serverName, 80))
+        Serial.println("Connection failed!");
+    else
+    {
+        Serial.println("Connected to server!");
+    }
+
+    readStringFromEEPROM(equipment_id_address, &equipment_id);
+    if (equipment_id == "")
+    {
+        provisioning_required = true;
+    }
+
+    // ---------------------------------------------------------------- Provisioning API Call
+    while (provisioning_required)
+    {
+        if (WiFi.status() == WL_CONNECTED)
         {
-          provisioning_required = false;
+            HTTPClient https;
+            // char buf[80];
+            // strcpy(buf, serverName);
+            // strcat(buf, "/equipment/provisioning");
+            char *provisioning_server_name = "https://staging.quick-ev.com/public/api/equipment/provisioning";
+
+            // Your Domain name with URL path or IP address with path
+            https.begin(client, provisioning_server_name);
+
+            StaticJsonDocument<1024> doc;
+            doc["mac_address"] = String(WiFi.macAddress());
+            doc["ip_address"] = WiFi.localIP().toString();
+            doc["firm_version"] = firmware_version;
+            doc["hardware_version"] = hardware_version;
+            doc["status"] = "online";
+            doc["region"] = region;
+
+            char response[1024];
+            serializeJson(doc, response);
+
+            // If you need an HTTP request with a content type: application/json, use the following:
+            https.addHeader("Content-Type", "application/json");
+            int httpResponseCode = https.POST(response);
+
+            Serial.println(response);
+
+            Serial.print("HTTP Response code: ");
+            Serial.println(httpResponseCode);
+
+            String payload = "{}";
+            payload = https.getString();
+
+            Serial.println(payload);
+
+            StaticJsonDocument<1024> api_response;
+            DeserializationError err = deserializeJson(api_response, payload);
+            if (err)
+            {
+                if (debugging)
+                {
+                    Serial.print(F("deserializeJson() failed with code "));
+                    Serial.println(err.f_str());
+                }
+            }
+            else
+            {
+                String equipment_id = api_response["equipment_id"];
+
+                writeStringToEEPROM(equipment_id_address, equipment_id);
+                if (equipment_id != "")
+                {
+                    provisioning_required = false;
+                }
+                else
+                {
+                    if (debugging)
+                        Serial.println("API call not successful. Trying again in 30 seconds.");
+                    delay(30000);
+                }
+            }
+
+            // Free resources
+            https.end();
         }
         else
         {
-          if (debug)
-            Serial.println("API call not successful. Trying again in 30 seconds.");
-          delay(30000);
+            Serial.println("WiFi Disconnected");
         }
-      }
-
-      // Free resources
-      https.end();
     }
-    else
-    {
-      Serial.println("WiFi Disconnected");
-    }
-  }
 
-  // ---------------------------------------------------------------- Firebase
-    /* Assign the api key (required) */
-  config.api_key = API_KEY;
+    // ---------------------------------------------------------------- Firebase
+    Firebase.printf("Firebase Client v%s\n", FIREBASE_CLIENT_VERSION);
+    ssl1.setInsecure();
+    if (debugging)
+        Serial.println("Initializing app...");
 
-  /* Assign the RTDB URL (required) */
-  config.database_url = DATABASE_URL;
+    ssl_client.setInsecure();
 
-  /* Sign up */
-  if (Firebase.signUp(&config, &auth, "", "")) {
-    Serial.println("ok");
-    signupOK = true;
-  } else {
-    Serial.printf("%s\n", config.signer.signupError.message.c_str());
-  }
+    // Initialize the FirebaseApp or auth task handler.
+    // To deinitialize, use deinitializeApp(app).
+    initializeApp(aClient, app, getAuth(sa_auth), asyncCB, "authTask");
+    app.getApp<RealtimeDatabase>(Database);
 
-  /* Assign the callback function for the long running token generation task */
-  config.token_status_callback = tokenStatusCallback;  //see addons/TokenHelper.h
+    Database.url(DATABASE_URL);
 
-  Firebase.begin(&config, &auth);
-  Firebase.reconnectWiFi(true);
+    client1.setAsyncResult(result1);
 
-  // ---------------------------------------------------------------- Pin Modes
-  pinMode(Relays_Pin, OUTPUT);
-  pinMode(Emergency_Button, INPUT);
-  attachInterrupt(Emergency_Button, ISR, FALLING);
+    // ---------------------------------------------------------------- Pin Modes
+    pinMode(Relays_Pin, OUTPUT);
+    digitalWrite(Relays_Pin, HIGH);
+    pinMode(Emergency_Button, INPUT_PULLUP);
+    attachInterrupt(Emergency_Button, ISR, FALLING);
 }
 
 void loop()
 {
-  wm.process();
-  repeatedCall();
+    if (WiFi.isConnected())
+        is_connected = 1;
+    else
+        is_connected = 0;
 
-  if (ESPFixed.available())
-  {
-    Serial.println("Receiving Data...");
-    receive_data();
-  }
+    wm.process();
+    repeatedCall();
 
-  if (millis() > send_data_time + SEND_DATA_INTERVAL)
-  {
-    if (debug)
-      Serial.println("Sending data to Fixed ESP.");
-    send_data();
-  }
+    Database.loop();
+    printResult(result1);
+    JWT.loop(app.getAuth());
+    app.loop();
+
+    if (millis() > read_firebase_time + READ_FIREBASE_INTERVAL)
+    {
+        relay_status = Database.get<String>(client1, ("/" + equipment_id + "/relay_status"));
+
+        if (debugging)
+        {
+            Serial.println("Relay Status: " + String(relay_status));
+        }
+        read_firebase_time = millis();
+    }
+
+    if (relay_status == "OFF")
+        digitalWrite(Relays_Pin, LOW);
+    else if (relay_status == "ON")
+        digitalWrite(Relays_Pin, HIGH);
+
+    if (ESPFixed.available())
+    {
+        Serial.println("Receiving Data...");
+        receive_data();
+    }
+
+    if (millis() > send_data_time + SEND_DATA_INTERVAL)
+    {
+        if (debugging)
+            Serial.println("Sending data to Fixed ESP.");
+        send_data();
+        send_data_time = millis();
+    }
 }
 
 void send_data()
 {
-  ESPFixed.print("0,0,0,");
+    ESPFixed.print(relay_status + "," + String(is_connected));
 }
 
 void receive_data()
 {
-  String dat = ESPFixed.readString();
-  int c = 0;
-  String val_read = "";
+    String dat = ESPFixed.readString();
+    int c = 0;
+    String val_read = "";
 
-  // while (dat.charAt(c) != ',')
-  // {
-  //   val_read += dat.charAt(c);
-  //   c++;
-  // }
-  // rfid_data = val_read;
-  // Serial.print("RFID Data: ");
-  // Serial.println(rfid_data);
-  // c++;
-  // val_read = "";
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    kwh_total = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("kWh_Total: ");
+        Serial.println(kwh_total);
+    }
+    c++;
+    val_read = "";
 
-  // while (dat.charAt(c) != ',')
-  // {
-  //   val_read += dat.charAt(c);
-  //   c++;
-  // }
-  // flag = val_read.toInt();
-  // //Serial.print("Flag: ");
-  // //Serial.println(flag);
-  // c++;
-  // val_read = "";
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    kwh_L1 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("kWh_L1: ");
+        Serial.println(kwh_L1);
+    }
+    c++;
+    val_read = "";
 
-  // while (dat.charAt(c) != '\0')
-  // {
-  //   val_read += dat.charAt(c);
-  //   c++;
-  // }
-  // RCB2_S3 = val_read.toFloat();
-  // Serial.print("RCB2_S3: ");
-  // Serial.println(RCB2_S3);
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    kwh_L2 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("kWh_L2: ");
+        Serial.println(kwh_L2);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    kwh_L3 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("kWh_L3: ");
+        Serial.println(kwh_L3);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    amps_L1 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Current_L1: ");
+        Serial.println(amps_L1);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    amps_L2 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Current_L2: ");
+        Serial.println(amps_L2);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    amps_L3 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Current_L3: ");
+        Serial.println(amps_L3);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    volts_L1 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Voltage_L1: ");
+        Serial.println(volts_L1);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    volts_L2 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Voltage_L2: ");
+        Serial.println(volts_L2);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    volts_l3 = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Voltage_L3: ");
+        Serial.println(volts_l3);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    freq = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Frequency: ");
+        Serial.println(freq);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != ',')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    power_factor = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Power Factor: ");
+        Serial.println(power_factor);
+    }
+    c++;
+    val_read = "";
+
+    while (dat.charAt(c) != '\0')
+    {
+        val_read += dat.charAt(c);
+        c++;
+    }
+    temperature = val_read.toFloat();
+    if (debugging)
+    {
+        Serial.print("Temperature: ");
+        Serial.println(temperature);
+    }
+}
+
+void timeStatusCB(uint32_t &ts)
+{
+#if defined(ESP8266) || defined(ESP32) || defined(CORE_ARDUINO_PICO)
+    if (time(nullptr) < FIREBASE_DEFAULT_TS)
+    {
+
+        configTime(3 * 3600, 0, "pool.ntp.org");
+        while (time(nullptr) < FIREBASE_DEFAULT_TS)
+        {
+            delay(100);
+        }
+    }
+    ts = time(nullptr);
+#elif __has_include(<WiFiNINA.h>) || __has_include(<WiFi101.h>)
+    ts = WiFi.getTime();
+#endif
+}
+
+void asyncCB(AsyncResult &aResult)
+{
+    // WARNING!
+    // Do not put your codes inside the callback and printResult.
+
+    printResult(aResult);
+}
+
+void printResult(AsyncResult &aResult)
+{
+    if (aResult.isEvent())
+        Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.appEvent().message().c_str(), aResult.appEvent().code());
+
+    if (aResult.isDebug())
+        Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
+
+    if (aResult.isError())
+        Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+
+    if (aResult.available())
+        Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
 }
 
 void printLocalTime()
 {
-  if (String(timeMonth).toInt() == 10 & timeWeek == 0 & String(timeDay).toInt() > 24 & daylight_saving_state != 0)
-  {
-    daylightOffset_sec = 0;
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    daylight_saving_state = 0;
-  }
+    if (String(timeMonth).toInt() == 10 & timeWeek == 0 & String(timeDay).toInt() > 24 & daylight_saving_state != 0)
+    {
+        daylightOffset_sec = 0;
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        daylight_saving_state = 0;
+    }
 
-  if (String(timeMonth).toInt() == 3 & timeWeek == 0 & String(timeDay).toInt() > 24 & daylight_saving_state != 1)
-  {
-    daylightOffset_sec = 3600;
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    daylight_saving_state = 1;
-  }
+    if (String(timeMonth).toInt() == 3 & timeWeek == 0 & String(timeDay).toInt() > 24 & daylight_saving_state != 1)
+    {
+        daylightOffset_sec = 3600;
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+        daylight_saving_state = 1;
+    }
 
-  strftime(timeSec, 3, "%S", &timeinfo);
-  strftime(timeMin, 3, "%M", &timeinfo);
-  strftime(timeHour, 3, "%H", &timeinfo);
-  strftime(timeDay, 3, "%d", &timeinfo);
-  strftime(timeWeek, 3, "%w", &timeinfo);
-  strftime(timeMonth, 3, "%m", &timeinfo);
-  strftime(timeYear, 5, "%Y", &timeinfo);
-  strftime(timeZone, 4, "%z", &timeinfo);
+    strftime(timeSec, 3, "%S", &timeinfo);
+    strftime(timeMin, 3, "%M", &timeinfo);
+    strftime(timeHour, 3, "%H", &timeinfo);
+    strftime(timeDay, 3, "%d", &timeinfo);
+    strftime(timeWeek, 3, "%w", &timeinfo);
+    strftime(timeMonth, 3, "%m", &timeinfo);
+    strftime(timeYear, 5, "%Y", &timeinfo);
+    strftime(timeZone, 4, "%z", &timeinfo);
 
-  if (!getLocalTime(&timeinfo))
-  {
-    if (debug)
-      Serial.println("Failed to obtain time");
-    return;
-  }
+    if (!getLocalTime(&timeinfo))
+    {
+        if (debugging)
+            Serial.println("Failed to obtain time");
+        return;
+    }
 
-  ntp_time = String(timeYear) + "-";
-  ntp_time += String(timeMonth) + "-";
-  ntp_time += String(timeDay) + " ";
-  ntp_time += String(timeHour) + ":";
-  ntp_time += String(timeMin) + ":";
-  ntp_time += String(timeSec) + " ";
-  ntp_time += String(timeZone);
+    ntp_time = String(timeYear) + "-";
+    ntp_time += String(timeMonth) + "-";
+    ntp_time += String(timeDay) + " ";
+    ntp_time += String(timeHour) + ":";
+    ntp_time += String(timeMin) + ":";
+    ntp_time += String(timeSec) + " ";
+    ntp_time += String(timeZone);
 }
 
 void IRAM_ATTR ISR()
 {
-  digitalWrite(Relays_Pin, LOW);
-  if (debug)
-    Serial.println("Emergency Stop Button Pressed!\nPlease restart device to continue.");
-  while (1)
-  {
-  }
+    digitalWrite(Relays_Pin, LOW);
+    if (debugging)
+        Serial.println("Emergency Stop Button Pressed!\nPlease restart device to continue.");
+    while (1)
+    {
+    }
 }
 
 void repeatedCall()
 {
-  static int num = 0;
-  unsigned long currentMillis = millis();
-  if ((currentMillis - previousMillis) >= interval)
-  {
-    // save the last time you blinked the LED
-    previousMillis = currentMillis;
-    if (FirmwareVersionCheck())
+    static int num = 0;
+    unsigned long currentMillis = millis();
+    if ((currentMillis - previousMillis) >= interval)
     {
-      firmwareUpdate();
+        // save the last time you blinked the LED
+        previousMillis = currentMillis;
+        if (FirmwareVersionCheck())
+        {
+            firmwareUpdate();
+        }
     }
-  }
-  if ((currentMillis - previousMillis_2) >= mini_interval)
-  {
-    previousMillis_2 = currentMillis;
-    if (WiFi.status() == WL_CONNECTED)
+    if ((currentMillis - previousMillis_2) >= mini_interval)
     {
-      // if(debug)
-      // Serial.println("wifi connected");
+        previousMillis_2 = currentMillis;
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            // if(debugging)
+            // Serial.println("wifi connected");
+        }
+        else
+        {
+            if (WiFi.status() != WL_CONNECTED)
+            {
+                // couldn't connect
+                if (debugging)
+                    Serial.println("[main] Couldn't connect to WiFi after multiple attempts");
+                delay(5000);
+                ESP.restart();
+            }
+            if (debugging)
+                Serial.println("Connected");
+        }
     }
-    else
-    {
-      if (WiFi.status() != WL_CONNECTED)
-      {
-        // couldn't connect
-        if (debug)
-          Serial.println("[main] Couldn't connect to WiFi after multiple attempts");
-        delay(5000);
-        ESP.restart();
-      }
-      if (debug)
-        Serial.println("Connected");
-    }
-  }
 }
 
 void firmwareUpdate(void)
 {
-  WiFiClientSecure OTA_client;
-  OTA_client.setCACert(OTAcert);
-  httpUpdate.setLedPin(2, LOW);
-  t_httpUpdate_return ret = httpUpdate.update(OTA_client, URL_fw_Bin);
+    WiFiClientSecure OTA_client;
+    OTA_client.setCACert(OTAcert);
+    httpUpdate.setLedPin(2, LOW);
+    t_httpUpdate_return ret = httpUpdate.update(OTA_client, URL_fw_Bin);
 
-  switch (ret)
-  {
-  case HTTP_UPDATE_FAILED:
-    if (debug)
-      Serial.printf("HTTP_UPDATE_FAILD Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
-    break;
+    switch (ret)
+    {
+    case HTTP_UPDATE_FAILED:
+        if (debugging)
+            Serial.printf("HTTP_UPDATE_FAILD Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+        break;
 
-  case HTTP_UPDATE_NO_UPDATES:
-    if (debug)
-      Serial.println("HTTP_UPDATE_NO_UPDATES");
-    break;
+    case HTTP_UPDATE_NO_UPDATES:
+        if (debugging)
+            Serial.println("HTTP_UPDATE_NO_UPDATES");
+        break;
 
-  case HTTP_UPDATE_OK:
-    if (debug)
-      Serial.println("HTTP_UPDATE_OK");
-    break;
-  }
+    case HTTP_UPDATE_OK:
+        if (debugging)
+            Serial.println("HTTP_UPDATE_OK");
+        break;
+    }
 }
 
 int FirmwareVersionCheck(void)
 {
-  if (debug)
-    Serial.println(FirmwareVer);
-  String payload;
-  int httpCode;
-  String fwurl = "";
-  fwurl += URL_fw_Version;
-  fwurl += "?";
-  fwurl += String(rand());
-  if (debug)
-    Serial.println(fwurl);
-  WiFiClientSecure *OTA_client = new WiFiClientSecure;
+    if (debugging)
+        Serial.println(FirmwareVer);
+    String payload;
+    int httpCode;
+    String fwurl = "";
+    fwurl += URL_fw_Version;
+    fwurl += "?";
+    fwurl += String(rand());
+    if (debugging)
+        Serial.println(fwurl);
+    WiFiClientSecure *OTA_client = new WiFiClientSecure;
 
-  if (OTA_client)
-  {
-    OTA_client->setCACert(OTAcert);
+    if (OTA_client)
+    {
+        OTA_client->setCACert(OTAcert);
 
-    // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is
-    HTTPClient https;
+        // Add a scoping block for HTTPClient https to make sure it is destroyed before WiFiClientSecure *client is
+        HTTPClient https;
 
-    if (https.begin(*OTA_client, fwurl))
-    { // HTTPS
-      if (debug)
-        Serial.print("[HTTPS] GET...\n");
-      // start connection and send HTTP header
-      delay(100);
-      httpCode = https.GET();
-      delay(100);
-      if (httpCode == HTTP_CODE_OK) // if version received
-      {
-        payload = https.getString(); // save received version
-      }
-      else
-      {
-        if (debug)
-        {
-          Serial.print("error in downloading version file:");
-          Serial.println(httpCode);
+        if (https.begin(*OTA_client, fwurl))
+        { // HTTPS
+            if (debugging)
+                Serial.print("[HTTPS] GET...\n");
+            // start connection and send HTTP header
+            delay(100);
+            httpCode = https.GET();
+            delay(100);
+            if (httpCode == HTTP_CODE_OK) // if version received
+            {
+                payload = https.getString(); // save received version
+            }
+            else
+            {
+                if (debugging)
+                {
+                    Serial.print("error in downloading version file:");
+                    Serial.println(httpCode);
+                }
+            }
+            https.end();
         }
-      }
-      https.end();
+        delete OTA_client;
     }
-    delete OTA_client;
-  }
 
-  if (httpCode == HTTP_CODE_OK) // if version received
-  {
-    payload.trim();
-    if (payload.equals(FirmwareVer))
+    if (httpCode == HTTP_CODE_OK) // if version received
     {
-      if (debug)
-        Serial.printf("\nDevice already on latest firmware version:%s\n", FirmwareVer);
-      return 0;
+        payload.trim();
+        if (payload.equals(FirmwareVer))
+        {
+            if (debugging)
+                Serial.printf("\nDevice already on latest firmware version:%s\n", FirmwareVer);
+            return 0;
+        }
+        else
+        {
+            if (debugging)
+            {
+                Serial.println(payload);
+                Serial.println("New firmware detected");
+            }
+            return 1;
+        }
     }
-    else
-    {
-      if (debug)
-      {
-        Serial.println(payload);
-        Serial.println("New firmware detected");
-      }
-      return 1;
-    }
-  }
-  return 0;
+    return 0;
 }
 
 void saveParamsCallback()
 {
-  Serial.println("Get Params:");
+    Serial.println("Get Params:");
 
-  Serial.print(eq_id.getID());
-  Serial.print(" : ");
-  eq_id_str = String(eq_id.getValue());
-  Serial.println(eq_id_str);
-  writeStringToEEPROM(1, eq_id_str);
+    Serial.print(eq_id.getID());
+    Serial.print(" : ");
+    eq_id_str = String(eq_id.getValue());
+    Serial.println(eq_id_str);
+    writeStringToEEPROM(equipment_id_address, eq_id_str);
 
-  //   Serial.print(server_name.getID());
-  //   Serial.print(" : ");
-  //   server_device_name = String(server_name.getValue());
-  //   Serial.println(server_device_name);
-  //   writeStringToEEPROM(20, server_device_name);
-
-  //   Serial.print(charger_identifier.getID());
-  //   Serial.print(" : ");
-  //   charger_name = String(charger_identifier.getValue());
-  //   Serial.println(charger_name);
-  //   writeStringToEEPROM(50, charger_name);
+    Serial.print(eq_ver.getID());
+    Serial.print(" : ");
+    eq_ver_str = String(eq_ver.getValue());
+    Serial.println(eq_ver_str);
+    writeStringToEEPROM(equipment_version_address, eq_ver_str);
 }
 
 int writeStringToEEPROM(int addrOffset, const String &strToWrite)
 {
-  byte len = strToWrite.length();
-  EEPROM.write(addrOffset, len);
-  EEPROM.commit();
+    byte len = strToWrite.length();
+    EEPROM.write(addrOffset, len);
+    EEPROM.commit();
 
-  for (int i = 0; i < len; i++)
-  {
-    EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
-  }
-  EEPROM.commit();
+    for (int i = 0; i < len; i++)
+    {
+        EEPROM.write(addrOffset + 1 + i, strToWrite[i]);
+    }
+    EEPROM.commit();
 
-  return addrOffset + 1 + len;
+    return addrOffset + 1 + len;
 }
 
 int readStringFromEEPROM(int addrOffset, String *strToRead)
 {
-  int newStrLen = EEPROM.read(addrOffset);
-  char data[newStrLen + 1];
+    int newStrLen = EEPROM.read(addrOffset);
+    char data[newStrLen + 1];
 
-  for (int i = 0; i < newStrLen; i++)
-  {
-    data[i] = EEPROM.read(addrOffset + 1 + i);
-  }
-  data[newStrLen] = '\0';
+    for (int i = 0; i < newStrLen; i++)
+    {
+        data[i] = EEPROM.read(addrOffset + 1 + i);
+    }
+    data[newStrLen] = '\0';
 
-  *strToRead = String(data);
-  return addrOffset + 1 + newStrLen;
+    *strToRead = String(data);
+    return addrOffset + 1 + newStrLen;
 }
