@@ -8,7 +8,7 @@
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
 // #include <TinyGSM.h>
-#include <ArduinoHttpClient.h>
+// #include <ArduinoHttpClient.h>
 #include "time.h"
 #include <SoftwareSerial.h>
 #include <FirebaseClient.h>
@@ -42,7 +42,7 @@ int writeStringToEEPROM(int addrOffset, const String &strToWrite);
 int readStringFromEEPROM(int addrOffset, String *strToRead);
 
 // ---------------------------------------------------------------------------------------- OTA parameters
-String FirmwareVer = {"1.0"};
+String FirmwareVer = {"1.1"};
 #define URL_fw_Version "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/firmware_version.txt"
 #define URL_fw_Bin "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/fw/firmware.bin"
 void firmwareUpdate();
@@ -89,7 +89,7 @@ char timeZone[4];
 
 // ---------------------------------------------------------------------------------------- Firebase
 // The API key can be obtained from Firebase console > Project Overview > Project settings.
-#define API_KEY "AIzaSyD4HIIFu-PHnXDRJolS1o61Hp7ELkAMjj0"
+// #define API_KEY "AIzaSyD4HIIFu-PHnXDRJolS1o61Hp7ELkAMjj0"
 
 /**
  * This information can be taken from the service account JSON file.
@@ -324,7 +324,7 @@ void setup()
 
     // ---------------------------------------------------------------- Pin Modes
     pinMode(Relays_Pin, OUTPUT);
-    digitalWrite(Relays_Pin, HIGH);
+    digitalWrite(Relays_Pin, LOW);
     pinMode(Emergency_Button, INPUT_PULLUP);
     attachInterrupt(Emergency_Button, ISR, FALLING);
 }
@@ -794,11 +794,11 @@ void saveParamsCallback()
 {
     Serial.println("Get Params:");
 
-    Serial.print(eq_id.getID());
-    Serial.print(" : ");
-    eq_id_str = String(eq_id.getValue());
-    Serial.println(eq_id_str);
-    writeStringToEEPROM(equipment_id_address, eq_id_str);
+    // Serial.print(eq_id.getID());
+    // Serial.print(" : ");
+    // eq_id_str = String(eq_id.getValue());
+    // Serial.println(eq_id_str);
+    // writeStringToEEPROM(equipment_id_address, eq_id_str);
 
     Serial.print(eq_ver.getID());
     Serial.print(" : ");
