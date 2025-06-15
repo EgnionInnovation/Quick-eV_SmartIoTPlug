@@ -34,7 +34,7 @@ int equipment_id_address = 1, equipment_version_address = 20;
 // ---------------------------------------------------------------------------------------- WiFi Manager
 #define CAPTIVE_PORTAL_TIMEOUT 30
 WiFiManager wm;
-WiFiManagerParameter eq_id("1", "Equipment ID", "", 40);
+// WiFiManagerParameter eq_id("1", "Equipment ID", "", 40);
 WiFiManagerParameter eq_ver("2", "Equipment Version", "", 40);
 String eq_id_str = "", eq_ver_str = "";
 void saveParamsCallback();
@@ -42,7 +42,7 @@ int writeStringToEEPROM(int addrOffset, const String &strToWrite);
 int readStringFromEEPROM(int addrOffset, String *strToRead);
 
 // ---------------------------------------------------------------------------------------- OTA parameters
-String FirmwareVer = {"1.1"};
+String FirmwareVer = {"1.2"};
 #define URL_fw_Version "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/firmware_version.txt"
 #define URL_fw_Bin "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/fw/firmware.bin"
 void firmwareUpdate();
@@ -50,7 +50,7 @@ int FirmwareVersionCheck();
 
 unsigned long previousMillis = 0; // will store last time LED was updated
 unsigned long previousMillis_2 = 0;
-const long interval = 3600000;
+const long interval = 60000;
 const long mini_interval = 60000;
 
 void repeatedCall();
@@ -97,10 +97,16 @@ char timeZone[4];
  * To download service account file, from the Firebase console, goto project settings,
  * select "Service accounts" tab and click at "Generate new private key" button
  */
-#define DATABASE_URL "https://test-f397b-default-rtdb.firebaseio.com/"
-#define FIREBASE_PROJECT_ID "test-f397b"
-#define FIREBASE_CLIENT_EMAIL "firebase-adminsdk-ocjj0@test-f397b.iam.gserviceaccount.com"
-const char PRIVATE_KEY[] PROGMEM = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC1jO/6SZPQ7drL\nlFSoHel/APro2naCKWGhpT8S7wQHaTxhT3H8kgeo4eoyIj0LjkP07jSTRfqqBL2/\nL0eOAg+mtdztrI8PnGE8e2V9exqcepEOp2Xt+geqNL7hhLCH7dm4sMbbG/K49cF1\nz7U/FqZSsLmRvopNwcCPZXo4o6HbPqknsHEvkK6bJb6GMKlmOsFVSG+4qMXhczR2\n5HAH0NZ3aFJqU8H1FtFnhUAYjHNf2hA2ClqAFolQI7XfuANh31v19v0ycVkQxx7c\nwPIoLYswX/vmnBHtn1D4+gAzbD92q3wPPhzQCRPJLB8encbMv1LN/eXbBWOioGgJ\nqX7uLl0jAgMBAAECggEAC0qUslBZLSld7kNvcHVLzGZXNJxBup6wP8lzPs42xe85\nniO+xyKd71b9pdiTS2CxwU3/Xxl/GYvp8TYTkTV3m7q73txYmXP0aDqUeVVqtki5\nNNwcbsyaJW/aX1RNVmbon5/+/imi0vYV7inY7++MsJ/lKrdbCrL+MuzwyQ0ESApm\nwu+JRAwMnWAbBxf5rJBy/236g3D1abJk7MJU6M4lgaDnqdHqLHenFgynGYarIIR+\n89wPZ8G//ivHP0tDZ+BXQNGh7DXQ8QVAN5Z5mBg4cYrZAgRyXZPZ95xMMkLTDsrB\n1zuktQ09ffVLK2pHJ0niPpvPtTP3MjFTcaiUkbEgAQKBgQDmQm3Qn7P9RDYC9SYn\nZRpph8KfSSd/3gvXK7ZV0L8XrSJjt8xKb9Dtkt8AzG0qMWZRKNHpX3HbBaNNCGOx\nk7+v3qWl3hIjzfDvbdbcemnIDiW9rsqSLgcbI1lIF6Ewd6Tpe8rDnPV8wLwPmaNe\nJnbNrsvnZnzPh9HYhi72fAjMAQKBgQDJ2I37iD4giyV4ScFaRtWBQ0ll04a/MGKt\nfPg8L1cwnCWxurh029Tdsb7LmKKi66ZGsRUQqv8jXhyVXdRGjdNanuytosVijhEl\nVN50OtcSqW6W2MNoAYcnzLFP8KTKDv19GMI8xGoaeZDmhmUE0GyZsQdkI2hlfgI1\n47JqqI55IwKBgGEy74pesCscbTRoafe9TR35KiX1SpBGmnb1Q94L5W7ILjkr8DgH\n5Yk0M6Dxqq9h9RATjDDYkoZjZeDxxqvCc+t4sDJJgRzOJYPcuROPNTI3DqV4sJhu\nh59kF59AIlIEX4AUOq7ChjpoXbq0H2tyDzqaLAb9k3hDnEirtA1mpIwBAoGBAK7V\n3E42+hF4VbF2uXt4BbHc1bPU4E+1GpRJvj9rhit95YyoPuRCEoUhVDHIeX+DfNiY\nxLVWWH+LIlkjGB8w9BT3uezBJBY1Fpbuh23IFcl9Z2RUSBZL1IVd4Wxr9mFrUJjO\nHFlEjN9301JKsS/VVWxfEhbkMKZQ2ptRKpcGf7pfAoGBAI9hwu/T0HuMYh/iT+R7\nO5Rb1GTewDxlvzdR9PJYDJQh7Gbu3ADflJ+F1AwZyt9oOaGxqPWLj7lbjtfGcR9X\nqeCdDNfy4UZH5pga81QQ8g4r/onCQXu1Zn4rSfedcp+97LVqe+Gw5g51QsMv88aV\nu2B3ph2ClZGgHZ3mMZoQo58h\n-----END PRIVATE KEY-----\n";
+
+ #define DATABASE_URL "https://quick-ev-uat-default-rtdb.firebaseio.com"
+ #define FIREBASE_PROJECT_ID "quick-ev-uat"
+ #define FIREBASE_CLIENT_EMAIL "gen-2-firmware@quick-ev-uat.iam.gserviceaccount.com"
+ const char PRIVATE_KEY[] PROGMEM = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCdN/pFBzozl1YY\n6+KjsLf78fdVy7gHHleTi7xLk/UtdgzF7bc4iA5QUW3pC2lvCz10HY4LKgCsDAu9\nRV8O0jc9ZEh2YtIzMh3LHVlCCTAJfTBDEL4iPGPTHVcX9aOL1qoQcdqAW23fDBlU\nsTPeudSgRKLyI5NdKETxUdV4aZYPA4boiLEKm8H2bGF3uNqa1KLEOEypXtxIJbnD\nnw02dx/mVi1IkQfFn/D8Z3XYAuoB/fvnrTOQOEAdWof5iLKTex2rD4wasNbhAaVz\n/ZGRBsbT4FfUSfTrQQgtTjFigKmSwG3Laa0r9EuhiUNz+Pxpz2iUfNs31EqCRi+l\nDj8fkRDfAgMBAAECggEAGVQ/62gXLeGnWtuCB4o8kggxJ27rRqZSSLCeFPUQ7pKS\nyz6Zoq900ubTlNSkV2IRtAfg7xaExjMonwUyo+IlSSxDamNQZzQfTa58R2HQje7P\n3DYx07U0Bfq3oeIOx8Q9YOne4IgaYvGBkT39U9hPk8SLFgS6RKtstA5RnJUyOle/\nuWnsMD1bsOUacQOK0LrsyWbokXJH8yKs31J69eIcbWziS+r6VwkTLTJk7pYEc+zv\nlPqabPdNy3abvuAQtvoa1/BfBds9zwJKzz9E1f5pK/74BQefUjsgGzi35a0Ex//6\n+zAJj0x0mJ72fpyrRbJPpD+K+8lo1CdcZ6Or/ro+AQKBgQDbUyaclVU3+WYq+AfL\noVbLsvjsbfUrXaOvNGZFQAljPIG1+gJdLX2Dfqh4Bfc7gVUABOtPQ6kNv5bDOjcg\nI+z1i4jgp0Zdb/glZAJPlH8LbMKg7tnJHCh6vDrtGnIdtFxMSBFP7HXvzUXwS5L5\nqipnli59IuO+qv07vfez2YvKAQKBgQC3gjBfl5UStGaYHB0/aUV0t9xFinhcwrrG\nwYX/UbmIvW/zDOrFKtxEY0rHJYNlCfqxPBxtnSWl7X8fmNU5ktl7GoOagnQ90Jyk\nBKHr/fqd+Hd1y86NQbUZkwxH8fY3d+jdiSO1VlU0MoqnQ9EMA4fsxVkdbBT185NG\n66gTnEga3wKBgQDFurU4vbjSedoOKwZ8IrxpcLTSEl/R9N24+viovg64lLgsI3U2\nI+jgP7QKYPZ/gx3qooSyNUGXz35QC4/fPgRHasDAKI5bdrK0ovEiZbITzr248R0P\nHn+wBzrov8rZ1NzROLfC4l+BDgNbnAapZyxLry3CS04fe3BKB/3k+t/4AQKBgQCF\npcl5NTqavswhaAhdEFxHX0iLVQfH9wJ0kqj2hByt29nWl8e8BTUakX36f/Wr9pKf\n1fmWU2cB63A0IOjZ33uIzoyeUPg7tN0AD2emKfkGZ9kI73/lHL+6en/tPelmCGyO\nO7zH6rJvK4gTva5YI5Iw/KGkbfzuC5Fti1+DuMRC3QKBgAFDPkN1TMrccnbbpRcT\nSjQYBomobmJB0IUToExt5HNpW+C0IJx6Uvf2cTXQl+UD+Q72x221vzSF+WrzaHLF\nTk8hYG5PR0CmaaIPpSTEdZu6YeYz69q/mI4YSSMCHhr2DKwNnk/NyeBERIvyr444\nbtb0tSY41Ids/l63ORPIdy2F\n-----END PRIVATE KEY-----\n";
+
+// #define DATABASE_URL "https://test-f397b-default-rtdb.firebaseio.com/"
+// #define FIREBASE_PROJECT_ID "test-f397b"
+// #define FIREBASE_CLIENT_EMAIL "firebase-adminsdk-ocjj0@test-f397b.iam.gserviceaccount.com"
+// const char PRIVATE_KEY[] PROGMEM = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC1jO/6SZPQ7drL\nlFSoHel/APro2naCKWGhpT8S7wQHaTxhT3H8kgeo4eoyIj0LjkP07jSTRfqqBL2/\nL0eOAg+mtdztrI8PnGE8e2V9exqcepEOp2Xt+geqNL7hhLCH7dm4sMbbG/K49cF1\nz7U/FqZSsLmRvopNwcCPZXo4o6HbPqknsHEvkK6bJb6GMKlmOsFVSG+4qMXhczR2\n5HAH0NZ3aFJqU8H1FtFnhUAYjHNf2hA2ClqAFolQI7XfuANh31v19v0ycVkQxx7c\nwPIoLYswX/vmnBHtn1D4+gAzbD92q3wPPhzQCRPJLB8encbMv1LN/eXbBWOioGgJ\nqX7uLl0jAgMBAAECggEAC0qUslBZLSld7kNvcHVLzGZXNJxBup6wP8lzPs42xe85\nniO+xyKd71b9pdiTS2CxwU3/Xxl/GYvp8TYTkTV3m7q73txYmXP0aDqUeVVqtki5\nNNwcbsyaJW/aX1RNVmbon5/+/imi0vYV7inY7++MsJ/lKrdbCrL+MuzwyQ0ESApm\nwu+JRAwMnWAbBxf5rJBy/236g3D1abJk7MJU6M4lgaDnqdHqLHenFgynGYarIIR+\n89wPZ8G//ivHP0tDZ+BXQNGh7DXQ8QVAN5Z5mBg4cYrZAgRyXZPZ95xMMkLTDsrB\n1zuktQ09ffVLK2pHJ0niPpvPtTP3MjFTcaiUkbEgAQKBgQDmQm3Qn7P9RDYC9SYn\nZRpph8KfSSd/3gvXK7ZV0L8XrSJjt8xKb9Dtkt8AzG0qMWZRKNHpX3HbBaNNCGOx\nk7+v3qWl3hIjzfDvbdbcemnIDiW9rsqSLgcbI1lIF6Ewd6Tpe8rDnPV8wLwPmaNe\nJnbNrsvnZnzPh9HYhi72fAjMAQKBgQDJ2I37iD4giyV4ScFaRtWBQ0ll04a/MGKt\nfPg8L1cwnCWxurh029Tdsb7LmKKi66ZGsRUQqv8jXhyVXdRGjdNanuytosVijhEl\nVN50OtcSqW6W2MNoAYcnzLFP8KTKDv19GMI8xGoaeZDmhmUE0GyZsQdkI2hlfgI1\n47JqqI55IwKBgGEy74pesCscbTRoafe9TR35KiX1SpBGmnb1Q94L5W7ILjkr8DgH\n5Yk0M6Dxqq9h9RATjDDYkoZjZeDxxqvCc+t4sDJJgRzOJYPcuROPNTI3DqV4sJhu\nh59kF59AIlIEX4AUOq7ChjpoXbq0H2tyDzqaLAb9k3hDnEirtA1mpIwBAoGBAK7V\n3E42+hF4VbF2uXt4BbHc1bPU4E+1GpRJvj9rhit95YyoPuRCEoUhVDHIeX+DfNiY\nxLVWWH+LIlkjGB8w9BT3uezBJBY1Fpbuh23IFcl9Z2RUSBZL1IVd4Wxr9mFrUJjO\nHFlEjN9301JKsS/VVWxfEhbkMKZQ2ptRKpcGf7pfAoGBAI9hwu/T0HuMYh/iT+R7\nO5Rb1GTewDxlvzdR9PJYDJQh7Gbu3ADflJ+F1AwZyt9oOaGxqPWLj7lbjtfGcR9X\nqeCdDNfy4UZH5pga81QQ8g4r/onCQXu1Zn4rSfedcp+97LVqe+Gw5g51QsMv88aV\nu2B3ph2ClZGgHZ3mMZoQo58h\n-----END PRIVATE KEY-----\n";
 
 void timeStatusCB(uint32_t &ts);
 
@@ -130,8 +136,9 @@ void printLocalTime();
 
 unsigned long read_firebase_time = millis(), READ_FIREBASE_INTERVAL = 1000;
 // ---------------------------------------------------------------------------------------- API Server
-char *serverName = "https://staging.quick-ev.com/public/api";
+char *serverName = "www.staging.quick-ev.com";
 WiFiClientSecure client;
+bool client_connected = false;
 const char *test_root_ca =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
@@ -172,6 +179,10 @@ void setup()
     Serial.begin(115200);
     ESPFixed.begin(9600, SWSERIAL_8N1, 34, 33, false);
     EEPROM.begin(150);
+
+    // for (int xyz = 0; xyz < 150; xyz++)
+    //     EEPROM.writeString(xyz, "");
+    
     if (debugging)
     {
         Serial.println("Started!");
@@ -181,7 +192,7 @@ void setup()
     WiFi.mode(WIFI_AP); // explicitly set mode, esp defaults to STA+AP
     WiFi.enableAP(true);
     // wm.resetSettings();
-    wm.addParameter(&eq_id);
+    // wm.addParameter(&eq_id);
     wm.addParameter(&eq_ver);
     wm.setTimeout(CAPTIVE_PORTAL_TIMEOUT); // if nobody logs in to the portal, continue after timeout
     wm.setConnectTimeout(CAPTIVE_PORTAL_TIMEOUT);
@@ -216,15 +227,19 @@ void setup()
     Serial.println(equipment_version);
 
     // ---------------------------------------------------------------- API Server
-    client.setCACert(test_root_ca);
-    if (!client.connect(serverName, 80))
+    // client.setCACert(test_root_ca);
+    client.setInsecure();
+    Serial.println("\nStarting connection to server...");
+    if (!client.connect(serverName, 443))
         Serial.println("Connection failed!");
     else
     {
         Serial.println("Connected to server!");
+        client_connected = true;
     }
 
     readStringFromEEPROM(equipment_id_address, &equipment_id);
+    Serial.println("\nEquipment ID: " + equipment_id + "\n");
     if (equipment_id == "")
     {
         provisioning_required = true;
@@ -235,69 +250,77 @@ void setup()
     {
         if (WiFi.status() == WL_CONNECTED)
         {
-            HTTPClient https;
-            // char buf[80];
-            // strcpy(buf, serverName);
-            // strcat(buf, "/equipment/provisioning");
-            char *provisioning_server_name = "https://staging.quick-ev.com/public/api/equipment/provisioning";
-
-            // Your Domain name with URL path or IP address with path
-            https.begin(client, provisioning_server_name);
-
-            StaticJsonDocument<1024> doc;
-            doc["mac_address"] = String(WiFi.macAddress());
-            doc["ip_address"] = WiFi.localIP().toString();
-            doc["firm_version"] = firmware_version;
-            doc["hardware_version"] = hardware_version;
-            doc["status"] = "online";
-            doc["region"] = region;
-
-            char response[1024];
-            serializeJson(doc, response);
-
-            // If you need an HTTP request with a content type: application/json, use the following:
-            https.addHeader("Content-Type", "application/json");
-            int httpResponseCode = https.POST(response);
-
-            Serial.println(response);
-
-            Serial.print("HTTP Response code: ");
-            Serial.println(httpResponseCode);
-
-            String payload = "{}";
-            payload = https.getString();
-
-            Serial.println(payload);
-
-            StaticJsonDocument<1024> api_response;
-            DeserializationError err = deserializeJson(api_response, payload);
-            if (err)
+            if (!client_connected)
             {
-                if (debugging)
-                {
-                    Serial.print(F("deserializeJson() failed with code "));
-                    Serial.println(err.f_str());
-                }
-            }
-            else
-            {
-                String equipment_id = api_response["equipment_id"];
+                Serial.println("\n\n IN HERE \n");
+                HTTPClient https;
+                // char buf[80];
+                // strcpy(buf, serverName);
+                // strcat(buf, "/equipment/provisioning");
+                char *provisioning_server_name = "https://staging.quick-ev.com/public/api/equipment/provisioning";
 
-                writeStringToEEPROM(equipment_id_address, equipment_id);
-                if (equipment_id != "")
+                // Your Domain name with URL path or IP address with path
+                https.begin(client, provisioning_server_name);
+
+                StaticJsonDocument<1024> doc;
+                doc["mac_address"] = String(WiFi.macAddress());
+                doc["ip_address"] = WiFi.localIP().toString();
+                doc["firm_version"] = FirmwareVer;
+                doc["hardware_version"] = equipment_version;
+                doc["status"] = "online";
+                doc["region"] = region;
+
+                char response[1024];
+                serializeJson(doc, response);
+
+                // If you need an HTTP request with a content type: application/json, use the following:
+                https.addHeader("Content-Type", "application/json");
+                int httpResponseCode = https.POST(response);
+
+                Serial.println(response);
+
+                Serial.print("HTTP Response code: ");
+                Serial.println(httpResponseCode);
+
+                String payload = "{}";
+                payload = https.getString();
+
+                Serial.println(payload);
+
+                StaticJsonDocument<1024> api_response;
+                DeserializationError err = deserializeJson(api_response, payload);
+                if (err)
                 {
-                    provisioning_required = false;
+                    if (debugging)
+                    {
+                        Serial.print(F("deserializeJson() failed with code "));
+                        Serial.println(err.f_str());
+                    }
                 }
                 else
                 {
-                    if (debugging)
-                        Serial.println("API call not successful. Trying again in 30 seconds.");
-                    delay(30000);
-                }
-            }
+                    String equipment_id = api_response["equipment_id"];
 
-            // Free resources
-            https.end();
+                    writeStringToEEPROM(equipment_id_address, equipment_id);
+                    if (equipment_id != "")
+                    {
+                        provisioning_required = false;
+                    }
+                    else
+                    {
+                        if (debugging)
+                            Serial.println("API call not successful. Trying again in 30 seconds.");
+                        delay(30000);
+                    }
+                }
+
+                // Free resources
+                https.end();
+            }
+            else
+            {
+                Serial.println("Client not connected to server");
+            }
         }
         else
         {
@@ -346,7 +369,7 @@ void loop()
 
     if (millis() > read_firebase_time + READ_FIREBASE_INTERVAL)
     {
-        relay_status = Database.get<String>(client1, ("/" + equipment_id + "/relay_status"));
+        relay_status = Database.get<String>(client1, ("/relay/" + equipment_id + "/relay_status"));
 
         if (debugging)
         {
