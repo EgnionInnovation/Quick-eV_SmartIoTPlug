@@ -42,7 +42,7 @@ int writeStringToEEPROM(int addrOffset, const String &strToWrite);
 int readStringFromEEPROM(int addrOffset, String *strToRead);
 
 // ---------------------------------------------------------------------------------------- OTA parameters
-String FirmwareVer = {"1.2"};
+String FirmwareVer = {"1.21"};
 #define URL_fw_Version "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/firmware_version.txt"
 #define URL_fw_Bin "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/fw/firmware.bin"
 void firmwareUpdate();
@@ -392,7 +392,10 @@ void loop()
     if (millis() > send_data_time + SEND_DATA_INTERVAL)
     {
         if (debugging)
+        {
             Serial.println("Sending data to Fixed ESP.");
+            Serial.println("Harmeet is great!");
+        }
         send_data();
         send_data_time = millis();
     }
