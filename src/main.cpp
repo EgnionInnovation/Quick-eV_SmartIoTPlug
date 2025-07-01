@@ -43,7 +43,7 @@ int writeStringToEEPROM(int addrOffset, const String &strToWrite);
 int readStringFromEEPROM(int addrOffset, String *strToRead);
 
 // ---------------------------------------------------------------------------------------- OTA parameters
-String FirmwareVer = {"1.21"};
+String FirmwareVer = {"1.22"};
 #define URL_fw_Version "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/firmware_version.txt"
 #define URL_fw_Bin "https://raw.githubusercontent.com/EgnionInnovation/Quick-eV_SmartIoTPlug/main/fw/firmware.bin"
 void firmwareUpdate();
